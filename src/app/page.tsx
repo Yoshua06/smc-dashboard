@@ -19,7 +19,7 @@ export default function Home() {
       <header className="flex justify-between items-center px-6 py-4 glass-panel">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
-            SMC Trading Terminal
+            Joshua Trading Terminal
           </h1>
           <p className="text-sm text-zinc-400">Daily Target: $5 | BTC/USDT Focus</p>
         </div>
