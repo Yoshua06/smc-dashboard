@@ -541,7 +541,7 @@ export default function QuickTradeForm() {
         <div className="border-t border-white/5 bg-black/20 flex flex-col">
 
             {/* ── Paper Trade Section (collapsible, sits above Log New Trade) ── */}
-            <PaperTradeSection knownPairs={knownPairs} onAddPair={handleAddPair} />
+            {/* <PaperTradeSection knownPairs={knownPairs} onAddPair={handleAddPair} /> */}
 
             {/* ── Log New Trade Header ── */}
             <button
