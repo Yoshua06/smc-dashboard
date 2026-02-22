@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
-import { PlusCircle, ChevronDown, Search, X, ChevronUp } from 'lucide-react';
+import { PlusCircle, ChevronDown, Search, X } from 'lucide-react';
 
 // ─── Shared storage keys (must match TradingJournal) ─────────────────────────
 const STORAGE_KEY = 'smc_journal_v2';
@@ -127,7 +127,6 @@ const defaultForm = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function QuickTradeForm() {
-    const [open, setOpen] = useState(false);
     const [form, setForm] = useState(defaultForm);
     const [customPairs, setCustomPairs] = useState<string[]>([]);
     const [saved, setSaved] = useState(false);
@@ -185,7 +184,7 @@ export default function QuickTradeForm() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...existing]));
         setForm(defaultForm);
         setSaved(true);
-        setTimeout(() => { setSaved(false); setOpen(false); }, 1200);
+        setTimeout(() => { setSaved(false); }, 1200);
     };
 
     const inputCls = 'w-full bg-black/50 border border-white/10 rounded-md py-2 px-3 text-sm text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-600 transition-colors';
@@ -193,139 +192,130 @@ export default function QuickTradeForm() {
 
     return (
         <div className="border-t border-white/5 bg-black/20">
-            {/* Toggle header */}
-            <button
-                onClick={() => setOpen(o => !o)}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/5 transition-colors"
-            >
+            {/* Header */}
+            <div className="w-full flex items-center px-4 py-2.5 text-sm font-semibold text-zinc-300">
                 <span className="flex items-center gap-2">
                     <PlusCircle className="w-4 h-4 text-primary" />
                     Log New Trade
                 </span>
-                {open
-                    ? <ChevronDown className="w-4 h-4 text-zinc-500" />
-                    : <ChevronUp className="w-4 h-4 text-zinc-500" />
-                }
-            </button>
+            </div>
 
-            {open && (
-                <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
-                    {/* Row 1: Pair / Direction / Size */}
-                    <div className="grid grid-cols-3 gap-3">
-                        <div>
-                            <label className={labelCls}>Pair</label>
-                            <PairCombobox value={form.pair} onChange={v => set('pair', v)} knownPairs={knownPairs} onAddPair={handleAddPair} />
-                        </div>
-                        <div>
-                            <label className={labelCls}>Direction</label>
-                            <div className="flex gap-2">
-                                {(['Long', 'Short'] as Direction[]).map(d => (
-                                    <button
-                                        key={d}
-                                        onClick={() => set('direction', d)}
-                                        className={`flex-1 py-2 rounded-md text-sm font-medium transition-all border ${form.direction === d
-                                            ? d === 'Long' ? 'bg-success/20 border-success/50 text-success' : 'bg-danger/20 border-danger/50 text-danger'
-                                            : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20'
-                                            }`}
-                                    >
-                                        {d === 'Long' ? '▲ Long' : '▼ Short'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <label className={labelCls}>Size (USDT)</label>
-                            <input type="number" value={form.sizeUSDT} onChange={e => set('sizeUSDT', e.target.value)} placeholder="50" className={inputCls} />
-                        </div>
-                    </div>
-
-                    {/* Row 2: Entry / SL / TP / R:R */}
-                    <div className="grid grid-cols-4 gap-3">
-                        <div>
-                            <label className={labelCls}>Entry Price</label>
-                            <input type="number" value={form.entryPrice} onChange={e => set('entryPrice', e.target.value)} placeholder="0.00" className={inputCls} />
-                        </div>
-                        <div>
-                            <label className={labelCls}>Stop Loss</label>
-                            <input type="number" value={form.stopLoss} onChange={e => set('stopLoss', e.target.value)} placeholder="0.00" className={inputCls} />
-                        </div>
-                        <div>
-                            <label className={labelCls}>Take Profit</label>
-                            <input type="number" value={form.takeProfit} onChange={e => set('takeProfit', e.target.value)} placeholder="0.00" className={inputCls} />
-                        </div>
-                        <div>
-                            <label className={labelCls}>R:R (auto)</label>
-                            <div className={`w-full bg-black/30 border border-white/5 rounded-md py-2 px-3 text-sm font-mono ${rr === '—' ? 'text-zinc-600' : 'text-blue-400'}`}>{rr}</div>
-                        </div>
-                    </div>
-
-                    {/* Row 3: Result + P&L */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className={labelCls}>Result</label>
-                            <div className="relative">
-                                <select value={form.result} onChange={e => set('result', e.target.value)} className={`${inputCls} appearance-none`}>
-                                    <option value="Pending">Pending</option>
-                                    <option value="Win">Win</option>
-                                    <option value="Loss">Loss</option>
-                                    <option value="BreakEven">Break Even</option>
-                                </select>
-                                <ChevronDown className="absolute right-2.5 top-2.5 w-4 h-4 text-zinc-500 pointer-events-none" />
-                            </div>
-                        </div>
-                        <div>
-                            <label className={labelCls}>Realized P&L ($)</label>
-                            <input type="number" value={form.pnl} onChange={e => set('pnl', e.target.value)} placeholder="e.g. 5.20 or -2.10" className={inputCls} />
-                        </div>
-                    </div>
-
-                    {/* Setup Tags */}
+            <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+                {/* Row 1: Pair / Direction / Size */}
+                <div className="grid grid-cols-3 gap-3">
                     <div>
-                        <label className={labelCls}>Setup Tags</label>
-                        <div className="flex flex-wrap gap-2">
-                            {SETUP_TAGS.map(tag => (
+                        <label className={labelCls}>Pair</label>
+                        <PairCombobox value={form.pair} onChange={v => set('pair', v)} knownPairs={knownPairs} onAddPair={handleAddPair} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Direction</label>
+                        <div className="flex gap-2">
+                            {(['Long', 'Short'] as Direction[]).map(d => (
                                 <button
-                                    key={tag}
-                                    onClick={() => toggleTag(tag)}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${form.tags.includes(tag)
-                                        ? 'bg-primary/20 border-primary/50 text-primary'
-                                        : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
+                                    key={d}
+                                    onClick={() => set('direction', d)}
+                                    className={`flex-1 py-2 rounded-md text-sm font-medium transition-all border ${form.direction === d
+                                        ? d === 'Long' ? 'bg-success/20 border-success/50 text-success' : 'bg-danger/20 border-danger/50 text-danger'
+                                        : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20'
                                         }`}
                                 >
-                                    {tag}
+                                    {d === 'Long' ? '▲ Long' : '▼ Short'}
                                 </button>
                             ))}
                         </div>
                     </div>
-
-                    {/* Notes */}
                     <div>
-                        <label className={labelCls}>Notes & Reasoning</label>
-                        <textarea
-                            value={form.notes}
-                            onChange={e => set('notes', e.target.value)}
-                            placeholder="Describe setup reasoning, market context, mistakes..."
-                            rows={2}
-                            className={`${inputCls} resize-none`}
-                        />
+                        <label className={labelCls}>Size (USDT)</label>
+                        <input type="number" value={form.sizeUSDT} onChange={e => set('sizeUSDT', e.target.value)} placeholder="50" className={inputCls} />
                     </div>
-
-                    {/* Save */}
-                    <button
-                        onClick={handleSave}
-                        disabled={!valid}
-                        className={`w-full py-2.5 rounded-md font-semibold text-sm flex items-center justify-center gap-2 transition-all ${saved
-                            ? 'bg-success/20 text-success border border-success/30'
-                            : valid
-                                ? 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 cursor-pointer'
-                                : 'bg-white/5 text-zinc-600 cursor-not-allowed'
-                            }`}
-                    >
-                        <PlusCircle className="w-4 h-4" />
-                        {saved ? 'Saved to Journal ✓' : 'Add to Journal'}
-                    </button>
                 </div>
-            )}
+
+                {/* Row 2: Entry / SL / TP / R:R */}
+                <div className="grid grid-cols-4 gap-3">
+                    <div>
+                        <label className={labelCls}>Entry Price</label>
+                        <input type="number" value={form.entryPrice} onChange={e => set('entryPrice', e.target.value)} placeholder="0.00" className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Stop Loss</label>
+                        <input type="number" value={form.stopLoss} onChange={e => set('stopLoss', e.target.value)} placeholder="0.00" className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Take Profit</label>
+                        <input type="number" value={form.takeProfit} onChange={e => set('takeProfit', e.target.value)} placeholder="0.00" className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>R:R (auto)</label>
+                        <div className={`w-full bg-black/30 border border-white/5 rounded-md py-2 px-3 text-sm font-mono ${rr === '—' ? 'text-zinc-600' : 'text-blue-400'}`}>{rr}</div>
+                    </div>
+                </div>
+
+                {/* Row 3: Result + P&L */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className={labelCls}>Result</label>
+                        <div className="relative">
+                            <select value={form.result} onChange={e => set('result', e.target.value)} className={`${inputCls} appearance-none`}>
+                                <option value="Pending">Pending</option>
+                                <option value="Win">Win</option>
+                                <option value="Loss">Loss</option>
+                                <option value="BreakEven">Break Even</option>
+                            </select>
+                            <ChevronDown className="absolute right-2.5 top-2.5 w-4 h-4 text-zinc-500 pointer-events-none" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className={labelCls}>Realized P&L ($)</label>
+                        <input type="number" value={form.pnl} onChange={e => set('pnl', e.target.value)} placeholder="e.g. 5.20 or -2.10" className={inputCls} />
+                    </div>
+                </div>
+
+                {/* Setup Tags */}
+                <div>
+                    <label className={labelCls}>Setup Tags</label>
+                    <div className="flex flex-wrap gap-2">
+                        {SETUP_TAGS.map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => toggleTag(tag)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${form.tags.includes(tag)
+                                    ? 'bg-primary/20 border-primary/50 text-primary'
+                                    : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-400'
+                                    }`}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                    <label className={labelCls}>Notes & Reasoning</label>
+                    <textarea
+                        value={form.notes}
+                        onChange={e => set('notes', e.target.value)}
+                        placeholder="Describe setup reasoning, market context, mistakes..."
+                        rows={2}
+                        className={`${inputCls} resize-none`}
+                    />
+                </div>
+
+                {/* Save */}
+                <button
+                    onClick={handleSave}
+                    disabled={!valid}
+                    className={`w-full py-2.5 rounded-md font-semibold text-sm flex items-center justify-center gap-2 transition-all ${saved
+                        ? 'bg-success/20 text-success border border-success/30'
+                        : valid
+                            ? 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 cursor-pointer'
+                            : 'bg-white/5 text-zinc-600 cursor-not-allowed'
+                        }`}
+                >
+                    <PlusCircle className="w-4 h-4" />
+                    {saved ? 'Saved to Journal ✓' : 'Add to Journal'}
+                </button>
+            </div>
         </div>
     );
 }
