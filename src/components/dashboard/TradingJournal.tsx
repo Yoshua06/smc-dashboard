@@ -7,6 +7,7 @@ import {
     BookOpen, X, ChevronDown, DollarSign, Target, BarChart2, Zap, Search,
     Calendar, ChevronRight
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -738,21 +739,108 @@ export default function TradingJournal() {
     const [customPairs, setCustomPairs] = useState<string[]>([]);
 
     useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setEntries(JSON.parse(saved));
-        const savedPairs = localStorage.getItem(PAIRS_KEY);
-        if (savedPairs) setCustomPairs(JSON.parse(savedPairs));
+        const fetchData = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data, error } = await supabase
+                .from('journal')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('datetime', { ascending: false });
+
+            if (data && !error) {
+                const mapped: TradeEntry[] = data.map(item => ({
+                    id: item.id,
+                    datetime: item.datetime,
+                    pair: item.pair,
+                    direction: item.direction as Direction,
+                    entryPrice: Number(item.entry_price),
+                    stopLoss: Number(item.stop_loss),
+                    takeProfit: Number(item.take_profit),
+                    sizeUSDT: Number(item.size_usdt),
+                    rr: item.rr,
+                    tags: item.tags || [],
+                    notes: item.notes || '',
+                    result: item.result as Result,
+                    pnl: item.pnl !== null ? Number(item.pnl) : null,
+                }));
+                setEntries(mapped);
+            }
+
+            const savedPairs = localStorage.getItem(PAIRS_KEY);
+            if (savedPairs) setCustomPairs(JSON.parse(savedPairs));
+        };
+
+        fetchData();
     }, []);
 
-    const persist = (updated: TradeEntry[]) => {
-        setEntries(updated);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const addEntry = async (entry: TradeEntry) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { error } = await supabase.from('journal').insert({
+            user_id: user.id,
+            pair: entry.pair,
+            direction: entry.direction,
+            entry_price: entry.entryPrice,
+            stop_loss: entry.stopLoss,
+            take_profit: entry.takeProfit,
+            size_usdt: entry.sizeUSDT,
+            rr: entry.rr,
+            tags: entry.tags,
+            notes: entry.notes,
+            result: entry.result,
+            pnl: entry.pnl,
+            datetime: entry.datetime,
+        });
+
+        if (!error) {
+            // Re-fetch to get the assigned UUID
+            const { data } = await supabase
+                .from('journal')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('datetime', { ascending: false });
+
+            if (data) {
+                const mapped: TradeEntry[] = data.map(item => ({
+                    id: item.id,
+                    datetime: item.datetime,
+                    pair: item.pair,
+                    direction: item.direction as Direction,
+                    entryPrice: Number(item.entry_price),
+                    stopLoss: Number(item.stop_loss),
+                    takeProfit: Number(item.take_profit),
+                    sizeUSDT: Number(item.size_usdt),
+                    rr: item.rr,
+                    tags: item.tags || [],
+                    notes: item.notes || '',
+                    result: item.result as Result,
+                    pnl: item.pnl !== null ? Number(item.pnl) : null,
+                }));
+                setEntries(mapped);
+            }
+        }
     };
 
-    const addEntry = (entry: TradeEntry) => persist([entry, ...entries]);
-    const deleteEntry = (id: string) => persist(entries.filter(e => e.id !== id));
-    const updateEntry = (id: string, result: Result, pnl: number | null) =>
-        persist(entries.map(e => e.id === id ? { ...e, result, pnl } : e));
+    const deleteEntry = async (id: string) => {
+        const { error } = await supabase.from('journal').delete().eq('id', id);
+        if (!error) {
+            setEntries(entries.filter(e => e.id !== id));
+        }
+    };
+
+    const updateEntry = async (id: string, result: Result, pnl: number | null) => {
+        const { error } = await supabase
+            .from('journal')
+            .update({ result, pnl })
+            .eq('id', id);
+
+        if (!error) {
+            setEntries(entries.map(e => e.id === id ? { ...e, result, pnl } : e));
+        }
+    };
 
     const handleAddPair = (pair: string) => {
         if (customPairs.includes(pair) || DEFAULT_PAIRS.includes(pair)) return;

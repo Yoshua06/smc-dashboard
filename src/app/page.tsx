@@ -1,18 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TradingChart from '@/components/dashboard/TradingChart';
 import SMCChecklist from '@/components/dashboard/SMCChecklist';
 import MarketWidgets from '@/components/dashboard/MarketWidgets';
 import TradingJournal from '@/components/dashboard/TradingJournal';
 import QuickTradeForm from '@/components/dashboard/QuickTradeForm';
 import TradingHours from '@/components/dashboard/TradingHours';
-import { LayoutDashboard, BookOpen, Clock } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Clock, LogOut, User } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 type Tab = 'dashboard' | 'journal';
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/auth');
+      } else {
+        setUser(session.user);
+      }
+      setLoading(false);
+    };
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        router.push('/auth');
+      } else if (session) {
+        setUser(session.user);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-board">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-zinc-500 text-sm font-medium">Loading Terminal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
 
   return (
     <div className="flex flex-col min-h-screen p-4 gap-4 max-w-[1920px] mx-auto">
@@ -50,9 +99,25 @@ export default function Home() {
             </button>
           </nav>
 
-          <div className="flex items-center gap-2 text-sm font-medium pl-2">
+          <div className="flex items-center gap-2 text-sm font-medium pl-2 border-l border-white/5 ml-2">
             <span className="w-2 h-2 rounded-full bg-success opacity-80 animate-pulse"></span>
             <span className="text-zinc-300">Live</span>
+          </div>
+
+          <div className="flex items-center gap-3 ml-4 pl-4 border-l border-white/5">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10">
+              <User className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs text-zinc-300 font-medium max-w-[120px] truncate">
+                {user.email?.split('@')[0]}
+              </span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-zinc-500 hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
