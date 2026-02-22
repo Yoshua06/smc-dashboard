@@ -6,7 +6,8 @@ import SMCChecklist from '@/components/dashboard/SMCChecklist';
 import MarketWidgets from '@/components/dashboard/MarketWidgets';
 import TradingJournal from '@/components/dashboard/TradingJournal';
 import QuickTradeForm from '@/components/dashboard/QuickTradeForm';
-import { LayoutDashboard, BookOpen } from 'lucide-react';
+import TradingHours from '@/components/dashboard/TradingHours';
+import { LayoutDashboard, BookOpen, Clock } from 'lucide-react';
 
 type Tab = 'dashboard' | 'journal';
 
@@ -74,7 +75,19 @@ export default function Home() {
         </section>
 
         {/* Right Zone: SOP + Market Widgets */}
-        <section className="lg:col-span-4 flex flex-col gap-4">
+        <section className="lg:col-span-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
+
+          {/* Trading Hours Standalone Card */}
+          <div className="flex-none glass-panel">
+            <div className="p-3 border-b border-white/5 bg-white/5">
+              <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-primary" />
+                Trading Sessions
+              </h2>
+            </div>
+            <TradingHours />
+          </div>
+
           <div className="flex-none h-[50%] glass-panel flex flex-col overflow-hidden">
             <div className="p-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
