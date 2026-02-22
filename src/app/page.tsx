@@ -6,7 +6,7 @@ import SMCChecklist from '@/components/dashboard/SMCChecklist';
 import MarketWidgets from '@/components/dashboard/MarketWidgets';
 import TradingJournal from '@/components/dashboard/TradingJournal';
 import QuickTradeForm from '@/components/dashboard/QuickTradeForm';
-import { LayoutDashboard, BookOpen, PlusCircle } from 'lucide-react';
+import { LayoutDashboard, BookOpen } from 'lucide-react';
 
 type Tab = 'dashboard' | 'journal';
 

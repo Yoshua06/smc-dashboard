@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
-import { PlusCircle, ChevronDown, Search, X } from 'lucide-react';
+import { PlusCircle, ChevronDown, Search, X, FlaskConical, TrendingUp, TrendingDown, AlertCircle, ChevronUp, Clipboard } from 'lucide-react';
+import {
+    getPortfolio, savePortfolio, openPosition, closePosition, calcUnrealizedPnL,
+    calcRR as calcRRPaper,
+    type PaperPortfolio, type PaperPosition, type Direction as PaperDirection,
+    DEFAULT_BALANCE,
+} from '@/lib/paperTrading';
 
 // ─── Shared storage keys (must match TradingJournal) ─────────────────────────
 const STORAGE_KEY = 'smc_journal_v2';
@@ -12,6 +18,7 @@ type Direction = 'Long' | 'Short';
 type Result = 'Pending' | 'Win' | 'Loss' | 'BreakEven';
 
 const SETUP_TAGS = ['OB', 'FVG', 'CHoCH', 'BOS', 'Liquidity', 'MSS', 'EQH', 'EQL'];
+const LEVERAGE_OPTIONS = [1, 2, 3, 5, 10, 20];
 
 const DEFAULT_PAIRS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
@@ -24,6 +31,44 @@ function calcRR(entry: number, sl: number, tp: number): string {
     const reward = Math.abs(tp - entry);
     if (risk === 0) return '—';
     return `1:${(reward / risk).toFixed(2)}`;
+}
+
+// ─── Clipboard Paste Button ───────────────────────────────────────────────────
+function PastePriceButton({ onPaste }: { onPaste: (val: string) => void }) {
+    const [status, setStatus] = useState<'idle' | 'ok' | 'err'>('idle');
+
+    const handleClick = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            const num = parseFloat(text.replace(/,/g, ''));
+            if (!isNaN(num) && num > 0) {
+                onPaste(String(num));
+                setStatus('ok');
+            } else {
+                setStatus('err');
+            }
+        } catch {
+            setStatus('err');
+        }
+        setTimeout(() => setStatus('idle'), 1200);
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={handleClick}
+            title="Paste price from clipboard (copy from TradingView chart)"
+            className={`flex-none flex items-center justify-center w-7 h-7 rounded-md border transition-all
+                ${status === 'ok'
+                    ? 'bg-success/20 border-success/50 text-success'
+                    : status === 'err'
+                        ? 'bg-danger/20 border-danger/50 text-danger'
+                        : 'bg-black/40 border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/25'
+                }`}
+        >
+            <Clipboard className="w-3.5 h-3.5" />
+        </button>
+    );
 }
 
 // ─── Pair Combobox ────────────────────────────────────────────────────────────
@@ -111,6 +156,307 @@ function PairCombobox({ value, onChange, knownPairs, onAddPair }: {
     );
 }
 
+// ─── Open Position Mini Card ──────────────────────────────────────────────────
+function MiniPositionCard({ position, onClose }: {
+    position: PaperPosition;
+    onClose: (id: string, price: number) => void;
+}) {
+    const [closePrice, setClosePrice] = useState('');
+    const [showClose, setShowClose] = useState(false);
+    const cp = parseFloat(closePrice);
+    const upnl = !isNaN(cp) && cp > 0 ? calcUnrealizedPnL(position, cp) : null;
+
+    return (
+        <div className={`rounded-md border px-3 py-2 flex flex-col gap-1.5 ${position.direction === 'Long' ? 'border-success/25 bg-success/5' : 'border-danger/25 bg-danger/5'}`}>
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold ${position.direction === 'Long' ? 'text-success' : 'text-danger'}`}>
+                        {position.direction === 'Long' ? <TrendingUp className="w-3.5 h-3.5 inline" /> : <TrendingDown className="w-3.5 h-3.5 inline" />}
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-200">{position.pair}</span>
+                    <span className="text-xs font-mono text-blue-400">{position.leverage}×</span>
+                    <span className="text-xs text-zinc-500">@ {position.entryPrice}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono text-zinc-400">${position.margin.toFixed(0)} margin</span>
+                    <button
+                        onClick={() => setShowClose(v => !v)}
+                        className="text-xs px-2 py-0.5 rounded bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 transition-all font-medium"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+            {showClose && (
+                <div className="flex items-center gap-2 pt-1 border-t border-white/5 flex-wrap">
+                    <input
+                        type="number"
+                        value={closePrice}
+                        onChange={e => setClosePrice(e.target.value)}
+                        placeholder="Exit price"
+                        autoFocus
+                        className="flex-1 min-w-[100px] bg-black/50 border border-white/10 rounded py-1 px-2 text-xs text-zinc-200 focus:outline-none focus:border-primary"
+                    />
+                    {upnl !== null && (
+                        <span className={`text-xs font-mono font-bold ${upnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                            {upnl >= 0 ? '+' : ''}${upnl.toFixed(2)}
+                        </span>
+                    )}
+                    <button
+                        onClick={() => { if (!isNaN(cp) && cp > 0) { onClose(position.id, cp); setShowClose(false); } }}
+                        disabled={isNaN(cp) || cp <= 0}
+                        className="px-2.5 py-1 rounded text-xs font-semibold bg-danger text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-danger/80 transition-all"
+                    >
+                        Confirm
+                    </button>
+                    <button onClick={() => setShowClose(false)} className="text-zinc-500 hover:text-zinc-300">
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Paper Trade Quick Form ───────────────────────────────────────────────────
+const defaultPaperForm = {
+    pair: 'BTC/USDT',
+    direction: 'Long' as PaperDirection,
+    leverage: 5,
+    sizeUSDT: '100',
+    entryPrice: '',
+    stopLoss: '',
+    takeProfit: '',
+};
+
+function PaperTradeSection({ knownPairs, onAddPair }: {
+    knownPairs: string[];
+    onAddPair: (pair: string) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [portfolio, setPortfolio] = useState<PaperPortfolio>({ balance: DEFAULT_BALANCE, openPositions: [], history: [] });
+    const [form, setForm] = useState(defaultPaperForm);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
+
+    useEffect(() => {
+        setPortfolio(getPortfolio());
+    }, []);
+
+    const persist = (p: PaperPortfolio) => { setPortfolio(p); savePortfolio(p); };
+
+    const set = (field: string, val: string | number) => setForm(p => ({ ...p, [field]: val }));
+
+    const rr = useMemo(() => {
+        const e = parseFloat(form.entryPrice);
+        const sl = parseFloat(form.stopLoss);
+        const tp = parseFloat(form.takeProfit);
+        if (isNaN(e) || isNaN(sl) || isNaN(tp)) return '—';
+        return calcRRPaper(e, sl, tp);
+    }, [form.entryPrice, form.stopLoss, form.takeProfit]);
+
+    const margin = parseFloat(form.sizeUSDT) / form.leverage;
+    const valid = form.pair && form.entryPrice && form.stopLoss && form.takeProfit && form.sizeUSDT && !isNaN(margin) && margin > 0;
+
+    const inputCls = 'w-full bg-black/50 border border-white/10 rounded-md py-1.5 px-2.5 text-xs text-zinc-200 focus:outline-none focus:border-primary placeholder-zinc-600 transition-colors';
+    const labelCls = 'text-xs text-zinc-500 mb-0.5 block';
+
+    const handleOpen = () => {
+        if (!valid) return;
+        if (margin > portfolio.balance) {
+            setError(`Insufficient balance. Need $${margin.toFixed(2)}, have $${portfolio.balance.toFixed(2)}.`);
+            return;
+        }
+        setError('');
+        const result = openPosition(portfolio, {
+            pair: form.pair,
+            direction: form.direction,
+            leverage: form.leverage,
+            sizeUSDT: parseFloat(form.sizeUSDT),
+            entryPrice: parseFloat(form.entryPrice),
+            stopLoss: parseFloat(form.stopLoss),
+            takeProfit: parseFloat(form.takeProfit),
+            tags: [],
+            notes: '',
+            openedAt: format(new Date(), 'MMM dd, yyyy HH:mm'),
+        });
+        if (result.error) { setError(result.error); return; }
+        persist(result.portfolio);
+        setForm(defaultPaperForm);
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 1500);
+    };
+
+    const handleClose = (id: string, closePrice: number) => {
+        persist(closePosition(portfolio, id, closePrice, format(new Date(), 'MMM dd, yyyy HH:mm')));
+    };
+
+    const equity = portfolio.balance + portfolio.openPositions.reduce((s, p) => s + p.margin, 0);
+    const totalPnL = portfolio.history.reduce((s, t) => s + t.realizedPnL, 0);
+
+    return (
+        <div className="border-t border-white/5 bg-black/15">
+            {/* Header — always visible */}
+            <button
+                onClick={() => setExpanded(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/5 transition-colors"
+            >
+                <span className="flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-primary" />
+                    Paper Trading
+                    {portfolio.openPositions.length > 0 && (
+                        <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25 font-medium">
+                            {portfolio.openPositions.length} open
+                        </span>
+                    )}
+                </span>
+                <div className="flex items-center gap-3">
+                    {/* Mini portfolio summary */}
+                    <span className="text-xs text-zinc-500 font-normal hidden sm:block">
+                        Balance: <span className="text-zinc-300 font-mono">${portfolio.balance.toFixed(0)}</span>
+                        {totalPnL !== 0 && (
+                            <span className={`ml-2 font-mono ${totalPnL > 0 ? 'text-success' : 'text-danger'}`}>
+                                {totalPnL > 0 ? '+' : ''}${totalPnL.toFixed(2)} P&L
+                            </span>
+                        )}
+                    </span>
+                    {expanded
+                        ? <ChevronUp className="w-4 h-4 text-zinc-500" />
+                        : <ChevronDown className="w-4 h-4 text-zinc-500" />
+                    }
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+
+                    {/* Open positions */}
+                    {portfolio.openPositions.length > 0 && (
+                        <div className="space-y-1.5">
+                            <p className="text-xs text-zinc-500 font-medium">Open Positions</p>
+                            {portfolio.openPositions.map(pos => (
+                                <MiniPositionCard key={pos.id} position={pos} onClose={handleClose} />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Row 1: Pair / Direction */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className={labelCls}>Pair</label>
+                            <PairCombobox value={form.pair} onChange={v => set('pair', v)} knownPairs={knownPairs} onAddPair={onAddPair} />
+                        </div>
+                        <div>
+                            <label className={labelCls}>Direction</label>
+                            <div className="flex gap-1.5">
+                                {(['Long', 'Short'] as PaperDirection[]).map(d => (
+                                    <button
+                                        key={d}
+                                        onClick={() => set('direction', d)}
+                                        className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all border ${form.direction === d
+                                            ? d === 'Long' ? 'bg-success/20 border-success/50 text-success' : 'bg-danger/20 border-danger/50 text-danger'
+                                            : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20'
+                                            }`}
+                                    >
+                                        {d === 'Long' ? '▲ Long' : '▼ Short'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Row 2: Leverage */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className={labelCls}>Leverage</label>
+                            <div className="flex gap-1 flex-wrap">
+                                {LEVERAGE_OPTIONS.map(lev => (
+                                    <button
+                                        key={lev}
+                                        onClick={() => set('leverage', lev)}
+                                        className={`px-2 py-1 rounded text-xs font-bold transition-all border ${form.leverage === lev
+                                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                                            : 'bg-black/30 border-white/10 text-zinc-500 hover:border-white/20'
+                                            }`}
+                                    >
+                                        {lev}×
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Size (USDT) — Margin: <span className={`font-mono ${!isNaN(margin) && margin > portfolio.balance ? 'text-danger' : 'text-zinc-400'}`}>${!isNaN(margin) && margin > 0 ? margin.toFixed(2) : '—'}</span></label>
+                            <input type="number" value={form.sizeUSDT} onChange={e => set('sizeUSDT', e.target.value)} placeholder="100" className={inputCls} />
+                        </div>
+                    </div>
+
+                    {/* Row 3: Entry / SL / TP / R:R */}
+                    <div className="grid grid-cols-4 gap-2">
+                        <div>
+                            <label className={labelCls}>Entry</label>
+                            <div className="flex items-center gap-1">
+                                <input type="number" value={form.entryPrice} onChange={e => set('entryPrice', e.target.value)} placeholder="0.00" className={inputCls} />
+                                <PastePriceButton onPaste={v => set('entryPrice', v)} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Stop Loss</label>
+                            <div className="flex items-center gap-1">
+                                <input type="number" value={form.stopLoss} onChange={e => set('stopLoss', e.target.value)} placeholder="0.00" className={inputCls} />
+                                <PastePriceButton onPaste={v => set('stopLoss', v)} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelCls}>Take Profit</label>
+                            <div className="flex items-center gap-1">
+                                <input type="number" value={form.takeProfit} onChange={e => set('takeProfit', e.target.value)} placeholder="0.00" className={inputCls} />
+                                <PastePriceButton onPaste={v => set('takeProfit', v)} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className={labelCls}>R:R</label>
+                            <div className={`w-full bg-black/30 border border-white/5 rounded-md py-1.5 px-2.5 text-xs font-mono ${rr === '—' ? 'text-zinc-600' : 'text-blue-400'}`}>{rr}</div>
+                        </div>
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className="flex items-center gap-2 text-xs text-danger bg-danger/10 border border-danger/20 rounded-md px-3 py-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 flex-none" />
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Open Button */}
+                    <button
+                        onClick={handleOpen}
+                        disabled={!valid}
+                        className={`w-full py-2 rounded-md font-semibold text-xs flex items-center justify-center gap-1.5 transition-all ${success
+                            ? 'bg-success/20 text-success border border-success/30'
+                            : valid
+                                ? 'bg-primary hover:bg-primary-hover text-white shadow-md shadow-primary/20'
+                                : 'bg-white/5 text-zinc-600 cursor-not-allowed'
+                            }`}
+                    >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        {success ? 'Paper Trade Opened ✓' : 'Open Paper Trade'}
+                    </button>
+
+                    {/* Balance row */}
+                    <div className="flex items-center justify-between text-xs text-zinc-600 border-t border-white/5 pt-2">
+                        <span>Free: <span className="text-zinc-400 font-mono">${portfolio.balance.toFixed(2)}</span></span>
+                        <span>Equity: <span className={`font-mono ${equity >= DEFAULT_BALANCE ? 'text-success' : 'text-danger'}`}>${equity.toFixed(2)}</span></span>
+                        <span>Trades: <span className="text-zinc-400">{portfolio.history.length}</span></span>
+                        {portfolio.history.length > 0 && (
+                            <span>P&L: <span className={`font-mono ${totalPnL >= 0 ? 'text-success' : 'text-danger'}`}>{totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)}</span></span>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Default form state ───────────────────────────────────────────────────────
 const defaultForm = {
     pair: 'BTC/USDT',
@@ -128,6 +474,7 @@ const defaultForm = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function QuickTradeForm() {
     const [form, setForm] = useState(defaultForm);
+    const [logExpanded, setLogExpanded] = useState(true);
     const [customPairs, setCustomPairs] = useState<string[]>([]);
     const [saved, setSaved] = useState(false);
 
@@ -191,16 +538,27 @@ export default function QuickTradeForm() {
     const labelCls = 'text-xs text-zinc-500 mb-1 block';
 
     return (
-        <div className="border-t border-white/5 bg-black/20">
-            {/* Header */}
-            <div className="w-full flex items-center px-4 py-2.5 text-sm font-semibold text-zinc-300">
+        <div className="border-t border-white/5 bg-black/20 flex flex-col">
+
+            {/* ── Paper Trade Section (collapsible, sits above Log New Trade) ── */}
+            <PaperTradeSection knownPairs={knownPairs} onAddPair={handleAddPair} />
+
+            {/* ── Log New Trade Header ── */}
+            <button
+                onClick={() => setLogExpanded(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-zinc-300 border-t border-white/5 hover:bg-white/5 transition-colors"
+            >
                 <span className="flex items-center gap-2">
                     <PlusCircle className="w-4 h-4 text-primary" />
                     Log New Trade
                 </span>
-            </div>
+                {logExpanded
+                    ? <ChevronUp className="w-4 h-4 text-zinc-500" />
+                    : <ChevronDown className="w-4 h-4 text-zinc-500" />
+                }
+            </button>
 
-            <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
+            {logExpanded && <div className="px-4 pb-4 pt-2 space-y-3 border-t border-white/5">
                 {/* Row 1: Pair / Direction / Size */}
                 <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -234,15 +592,24 @@ export default function QuickTradeForm() {
                 <div className="grid grid-cols-4 gap-3">
                     <div>
                         <label className={labelCls}>Entry Price</label>
-                        <input type="number" value={form.entryPrice} onChange={e => set('entryPrice', e.target.value)} placeholder="0.00" className={inputCls} />
+                        <div className="flex items-center gap-1">
+                            <input type="number" value={form.entryPrice} onChange={e => set('entryPrice', e.target.value)} placeholder="0.00" className={inputCls} />
+                            <PastePriceButton onPaste={v => set('entryPrice', v)} />
+                        </div>
                     </div>
                     <div>
                         <label className={labelCls}>Stop Loss</label>
-                        <input type="number" value={form.stopLoss} onChange={e => set('stopLoss', e.target.value)} placeholder="0.00" className={inputCls} />
+                        <div className="flex items-center gap-1">
+                            <input type="number" value={form.stopLoss} onChange={e => set('stopLoss', e.target.value)} placeholder="0.00" className={inputCls} />
+                            <PastePriceButton onPaste={v => set('stopLoss', v)} />
+                        </div>
                     </div>
                     <div>
                         <label className={labelCls}>Take Profit</label>
-                        <input type="number" value={form.takeProfit} onChange={e => set('takeProfit', e.target.value)} placeholder="0.00" className={inputCls} />
+                        <div className="flex items-center gap-1">
+                            <input type="number" value={form.takeProfit} onChange={e => set('takeProfit', e.target.value)} placeholder="0.00" className={inputCls} />
+                            <PastePriceButton onPaste={v => set('takeProfit', v)} />
+                        </div>
                     </div>
                     <div>
                         <label className={labelCls}>R:R (auto)</label>
@@ -315,7 +682,7 @@ export default function QuickTradeForm() {
                     <PlusCircle className="w-4 h-4" />
                     {saved ? 'Saved to Journal ✓' : 'Add to Journal'}
                 </button>
-            </div>
+            </div>}
         </div>
     );
 }
