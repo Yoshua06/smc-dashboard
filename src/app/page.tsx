@@ -9,13 +9,14 @@ import QuickTradeForm from '@/components/dashboard/QuickTradeForm';
 import TradingHours from '@/components/dashboard/TradingHours';
 import { LayoutDashboard, BookOpen, Clock, LogOut, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 
 type Tab = 'dashboard' | 'journal';
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard');
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 

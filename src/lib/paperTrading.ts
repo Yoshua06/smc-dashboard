@@ -79,8 +79,6 @@ function determineResult(
     direction: Direction,
     entryPrice: number,
     closePrice: number,
-    stopLoss: number,
-    takeProfit: number,
 ): TradeResult {
     const pnl = direction === 'Long'
         ? closePrice - entryPrice
@@ -148,7 +146,7 @@ export function closePosition(
         ? (closePrice - pos.entryPrice) * qty
         : (pos.entryPrice - closePrice) * qty;
 
-    const result = determineResult(pos.direction, pos.entryPrice, closePrice, pos.stopLoss, pos.takeProfit);
+    const result = determineResult(pos.direction, pos.entryPrice, closePrice);
 
     const trade: PaperTrade = {
         id: pos.id,

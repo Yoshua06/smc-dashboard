@@ -15,17 +15,6 @@ import {
 } from '@/lib/paperTrading';
 import TradingChart from '@/components/dashboard/TradingChart';
 
-const INTERVALS: { label: string; value: string }[] = [
-    { label: '1m', value: '1' },
-    { label: '5m', value: '5' },
-    { label: '15m', value: '15' },
-    { label: '1h', value: '60' },
-    { label: '4h', value: '240' },
-    { label: '1D', value: 'D' },
-];
-
-// ─── Shared constants ─────────────────────────────────────────────────────────
-
 const SETUP_TAGS = ['OB', 'FVG', 'CHoCH', 'BOS', 'Liquidity', 'MSS', 'EQH', 'EQL'];
 const LEVERAGE_OPTIONS = [1, 2, 3, 5, 10, 20];
 const DEFAULT_PAIRS = [
@@ -125,10 +114,8 @@ function PairCombobox({ value, onChange, knownPairs, onAddPair }: {
 
 function PortfolioBar({
     portfolio,
-    onReset,
 }: {
     portfolio: PaperPortfolio;
-    onReset: () => void;
 }) {
     const lockedMargin = portfolio.openPositions.reduce((s, p) => s + p.margin, 0);
     const equity = portfolio.balance + lockedMargin;
@@ -601,16 +588,18 @@ function HistoryRow({ trade }: { trade: PaperTrade }) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function PaperTrading() {
-    const [portfolio, setPortfolio] = useState<PaperPortfolio>({ balance: DEFAULT_BALANCE, openPositions: [], history: [] });
-    const [customPairs, setCustomPairs] = useState<string[]>([]);
+    const [portfolio, setPortfolio] = useState<PaperPortfolio>(() => getPortfolio());
+    const [customPairs, setCustomPairs] = useState<string[]>(() => {
+        if (typeof window === 'undefined') return [];
+        const savedPairs = localStorage.getItem(PAIRS_KEY);
+        return savedPairs ? JSON.parse(savedPairs) : [];
+    });
     const [confirmReset, setConfirmReset] = useState(false);
     const [chartPair, setChartPair] = useState('BTC/USDT');
-    const [chartInterval, setChartInterval] = useState('15');
+    const [chartInterval] = useState('15');
 
     useEffect(() => {
-        setPortfolio(getPortfolio());
-        const savedPairs = localStorage.getItem(PAIRS_KEY);
-        if (savedPairs) setCustomPairs(JSON.parse(savedPairs));
+        // State is now initialized via state initializer function
     }, []);
 
     const persist = (p: PaperPortfolio) => {
@@ -696,7 +685,7 @@ export default function PaperTrading() {
             </div>
 
             {/* Portfolio Stats Bar */}
-            <PortfolioBar portfolio={portfolio} onReset={() => setConfirmReset(true)} />
+            <PortfolioBar portfolio={portfolio} />
 
             {/* ── Live Chart ─────────────────────────────────────── */}
             <div className="glass-panel overflow-hidden flex flex-col" style={{ height: '500px' }}>

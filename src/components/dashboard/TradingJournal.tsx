@@ -40,21 +40,14 @@ interface TradeEntry {
 
 type FilterType = 'All' | Result;
 
-const STORAGE_KEY = 'smc_journal_v2';
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function calcRR(entry: number, sl: number, tp: number, dir: Direction): string {
+function calcRR(entry: number, sl: number, tp: number): string {
     const risk = Math.abs(entry - sl);
     const reward = Math.abs(tp - entry);
     if (risk === 0) return '—';
     const rr = reward / risk;
     return `1:${rr.toFixed(2)}`;
-}
-
-function calcPnLFromResult(entry: TradeEntry): number {
-    if (entry.pnl !== null) return entry.pnl;
-    return 0;
 }
 
 // ─── Stats Bar ───────────────────────────────────────────────────────────────
@@ -273,8 +266,8 @@ function TradeForm({ onSave, knownPairs, onAddPair }: {
         const sl = parseFloat(form.stopLoss);
         const tp = parseFloat(form.takeProfit);
         if (isNaN(e) || isNaN(sl) || isNaN(tp)) return '—';
-        return calcRR(e, sl, tp, form.direction);
-    }, [form.entryPrice, form.stopLoss, form.takeProfit, form.direction]);
+        return calcRR(e, sl, tp);
+    }, [form.entryPrice, form.stopLoss, form.takeProfit]);
 
     const valid = form.pair && form.entryPrice && form.stopLoss && form.takeProfit && form.sizeUSDT;
 
